@@ -1,0 +1,29 @@
+Class Bell — the calm classroom companion designed to run entirely on your own device.
+
+DRAFT STORE COPY — planned features, not yet shipped. Review and update against implemented features before any store submission.
+
+Teachers juggle ad-laden timer websites, "spin the wheel" pickers, and points-board apps that want accounts and Internet. Class Bell puts the four tools a class actually needs into one offline app for your Windows classroom PC, an Android or Windows tablet, or a phone.
+
+WHAT IT DOES
+
+• Visual Timer — a large, projector-friendly countdown ring with presets, pause and skip, a gentle end chime, and a dim mode for bright rooms. Timers keep accurate time across sleep or background.
+• Fair Name Picker — choose a student at random without repeats until everyone has had a turn, with the result shown big for the projector. Exclusions are honored and roster changes never skew the draw.
+• Praise Board — whole-class and group tallies toward a shared goal (for example, 50 points earns a movie afternoon). No per-student rankings or leaderboards — ever.
+• Quiet Signal — one tap brings up a calm full-screen cue with an optional soft sound for transitions.
+
+BUILT FOR REAL CLASSROOMS
+
+• Works with no Internet at all: no accounts, no logins, no cloud, no ads, no trackers.
+• Designed for the device you own: native Fluent look on Windows with keyboard shortcuts (space starts and pauses, n picks the next name, plus and minus adjust points), Material 3 on Android, Cupertino on iPhone and iPad. One app, every screen, no stretched phone layouts on the desktop.
+• Projector mode makes text and controls large and readable from the back of the room, with a teacher lock so a helper at the front cannot change settings.
+
+YOUR STUDENTS' DATA STAYS YOURS
+
+Rosters are first-name or alias only — the app never asks for last names, photos, emails, contacts, camera, microphone, or location. All rosters, tallies, and session history live in on-device storage. Export everything to plain CSV or JSON whenever you like, restore from your own backup file, or erase all data with one action. There is no server to delete from, because there is no server.
+
+NOTES
+
+• Class Bell is not a discipline, grading, or attendance system and stores no behavioral records.
+• It makes no medical, clinical, or compliance claims and is not certified for any particular district policy; check your school's device and privacy rules before use.
+
+Class Bell: the class tools you already use, minus the ads, accounts, and outages.
