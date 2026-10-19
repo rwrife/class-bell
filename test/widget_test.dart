@@ -1,11 +1,16 @@
 import 'package:class_bell/main.dart';
-import 'package:flutter/material.dart';
+import 'package:class_bell/ui/roster_page.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('app shell shows the Class Bell title', (tester) async {
+  testWidgets('app boots into the Classes screen', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     await tester.pumpWidget(const ClassBellApp());
-    expect(find.byKey(const Key('app-title')), findsOneWidget);
-    expect(find.text('Class Bell'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.byKey(RosterKeys.emptyState), findsOneWidget);
+    expect(find.text('Classes'), findsWidgets);
+    debugDefaultTargetPlatformOverride = null;
   });
 }
