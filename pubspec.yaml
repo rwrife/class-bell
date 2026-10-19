@@ -7,6 +7,9 @@ environment:
   sdk: ^3.13.5
 
 dependencies:
+  cupertino_icons: ^2.0.0
+  dynamic_color: ^1.8.0
+  fluent_ui: ^4.16.1
   flutter:
     sdk: flutter
 
