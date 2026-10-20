@@ -6,8 +6,11 @@ import 'package:flutter/material.dart' as material;
 import 'package:flutter/widgets.dart';
 
 import 'state/roster_store.dart';
+import 'state/tool_session.dart';
 import 'ui/adaptive.dart';
 import 'ui/roster_page.dart';
+import 'ui/tool_input.dart';
+import 'ui/tool_pages.dart';
 
 void main() => runApp(const ClassBellApp());
 
@@ -99,24 +102,77 @@ class ClassBellShell extends StatefulWidget {
 
 class _ClassBellShellState extends State<ClassBellShell> {
   int _index = 0;
+  late final ToolSession _session = ToolSession(widget.store);
   static const _labels = ['Classes', 'Timer', 'Picker', 'Praise', 'Quiet'];
 
-  void _select(int index) => setState(() => _index = index);
+  @override
+  void dispose() {
+    _session.dispose();
+    super.dispose();
+  }
+
+  void _select(int index) {
+    if (_session.locked) return;
+    setState(() => _index = index);
+  }
 
   Widget _screen() => _index == 0
       ? RosterPage(store: widget.store)
-      : Center(
-          child: Semantics(
-            label: '${_labels[_index]} tool, available in the next milestone',
-            child: Text(
-              '${_labels[_index]} · coming next',
-              key: const Key('tool-placeholder'),
+      : ToolPage(index: _index, session: _session);
+
+  Widget _projector() => PopScope(
+    canPop: false,
+    child: ToolInput(
+      session: _session,
+      onSelectTool: (tool) => setState(() => _index = tool),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: ToolPage(index: _index, session: _session),
+          ),
+          Positioned(top: 0, right: 0, child: LockChip(session: _session)),
+          Positioned(
+            left: 10,
+            bottom: 8,
+            right: 10,
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 6,
+              children: [
+                for (var i = 1; i <= 4; i++)
+                  AdaptiveButton(
+                    key: Key('projector-tool-$i'),
+                    label: _labels[i],
+                    onPressed: () => setState(() => _index = i),
+                  ),
+                if (!_session.locked)
+                  AdaptiveButton(
+                    key: const Key('leave-projector'),
+                    label: 'Exit projector',
+                    onPressed: _session.leaveProjector,
+                  ),
+              ],
             ),
           ),
-        );
+        ],
+      ),
+    ),
+  );
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _session,
+    builder: (context, _) => _session.projector
+        ? _projector()
+        : ToolInput(
+            session: _session,
+            onSelectTool: _select,
+            child: _normalShell(context),
+          ),
+  );
+
+  Widget _normalShell(BuildContext context) {
     final platform = bellPlatform(context);
     final width = MediaQuery.sizeOf(context).width;
     if (platform == BellPlatform.windows) {
