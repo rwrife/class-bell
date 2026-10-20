@@ -62,6 +62,12 @@ class PraiseSession {
     _classPoints += points;
   }
 
+  /// Correction: subtract mistaken whole-class points down to 0 minimum.
+  void removeClassPoints(int points) {
+    _checkPoints(points);
+    _classPoints = (_classPoints - points).clamp(0, 1 << 30);
+  }
+
   /// Award praise to a group declared for this session.
   void addGroupPoints(String group, int points) {
     _checkPoints(points);
@@ -69,6 +75,15 @@ class PraiseSession {
       throw ArgumentError.value(group, 'group', 'unknown group for session');
     }
     _groupPoints[group] = _groupPoints[group]! + points;
+  }
+
+  /// Correction: subtract mistaken group points down to 0 minimum.
+  void removeGroupPoints(String group, int points) {
+    _checkPoints(points);
+    if (!_groupPoints.containsKey(group)) {
+      throw ArgumentError.value(group, 'group', 'unknown group for session');
+    }
+    _groupPoints[group] = (_groupPoints[group]! - points).clamp(0, 1 << 30);
   }
 
   /// Per-session reset: clears all tallies and bumps the session counter.
