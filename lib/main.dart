@@ -4,7 +4,11 @@ import 'package:flutter/cupertino.dart' as cupertino;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/widgets.dart';
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 
+import 'repository/bell_repository.dart';
+import 'repository/sqlite_bell_repository.dart';
 import 'state/roster_store.dart';
 import 'state/tool_session.dart';
 import 'ui/adaptive.dart';
@@ -12,12 +16,24 @@ import 'ui/roster_page.dart';
 import 'ui/tool_input.dart';
 import 'ui/tool_pages.dart';
 
-void main() => runApp(const ClassBellApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final dir = await getApplicationSupportDirectory();
+  final repo = SqliteBellRepository(path.join(dir.path, 'class_bell.sqlite3'));
+  runApp(
+    ClassBellApp(
+      rosterStore: RosterStore(repository: repo),
+      ownedRepository: repo,
+    ),
+  );
+}
 
 class ClassBellApp extends StatefulWidget {
-  const ClassBellApp({super.key, this.rosterStore});
+  const ClassBellApp({super.key, this.rosterStore, this.ownedRepository});
 
   final RosterStore? rosterStore;
+  final BellRepository?
+  ownedRepository; // main owns the opened file, tests own injections.
 
   @override
   State<ClassBellApp> createState() => _ClassBellAppState();
@@ -29,6 +45,7 @@ class _ClassBellAppState extends State<ClassBellApp> {
   @override
   void dispose() {
     if (widget.rosterStore == null) _store.dispose();
+    widget.ownedRepository?.close();
     super.dispose();
   }
 

@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import '../domain/timer.dart';
 import '../state/tool_session.dart';
 import 'adaptive.dart';
+import 'history_page.dart';
 import 'tools/widgets.dart';
 
 /// Compact settings row every tool screen exposes when not projecting:
@@ -394,6 +395,16 @@ class _PraisePage extends StatelessWidget {
                       } else {
                         session.setGoal(value);
                       }
+                    },
+                  ),
+                  _ToolAction(
+                    keyName: 'praise-history',
+                    label: 'History',
+                    onPressed: () {
+                      final items =
+                          session.store.repository?.history() ??
+                          (session.repository?.history() ?? const []);
+                      showHistory(context, items);
                     },
                   ),
                   _ToolAction(
