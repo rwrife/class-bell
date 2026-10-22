@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../domain/roster.dart';
+import '../repository/bell_repository.dart';
 
 /// In-memory roster store with validation and change notification.
 ///
@@ -9,18 +10,44 @@ import '../domain/roster.dart';
 /// - Initials and group tag are optional.
 /// - Validation rejects empty/overlong names and email-like text.
 ///   Multi-word aliases remain allowed; teachers should enter aliases only.
-/// - Storage is in-memory until issue #5 adds local persistence.
+/// - Rosters persist locally when a repository is provided.
 class RosterStore extends ChangeNotifier {
-  RosterStore({List<Roster>? initialRosters, String? selectedRosterId})
-    : _rosters = List<Roster>.from(initialRosters ?? const <Roster>[]),
-      _selectedRosterId =
-          selectedRosterId ??
-          (initialRosters != null && initialRosters.isNotEmpty
-              ? initialRosters.first.id
-              : '');
+  RosterStore({
+    List<Roster>? initialRosters,
+    String? selectedRosterId,
+    this.repository,
+  }) {
+    final snapshot = repository?.load() ?? const BellSnapshot();
+    _rosters = List<Roster>.from(initialRosters ?? snapshot.rosters);
+    _selectedRosterId =
+        selectedRosterId ??
+        (repository != null
+            ? snapshot.selectedRosterId
+            : (_rosters.isEmpty ? '' : _rosters.first.id));
+    if (_rosters.isNotEmpty &&
+        !_rosters.any((r) => r.id == _selectedRosterId)) {
+      _selectedRosterId = _rosters.first.id;
+    }
+  }
 
-  final List<Roster> _rosters;
-  String _selectedRosterId;
+  final BellRepository? repository;
+  late final List<Roster> _rosters;
+  late String _selectedRosterId;
+
+  @override
+  void notifyListeners() {
+    final db = repository;
+    if (db != null) {
+      db.save(
+        db.load().copyWith(
+          rosters: _rosters,
+          selectedRosterId: _selectedRosterId,
+        ),
+      );
+    }
+    super.notifyListeners();
+  }
+
   int _idCounter = 0;
 
   String _nextId(String prefix) =>

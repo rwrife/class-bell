@@ -9,6 +9,7 @@ import '../domain/fair_draw_bag.dart';
 import '../domain/praise.dart';
 
 import '../domain/timer.dart';
+import '../repository/bell_repository.dart';
 import 'roster_store.dart';
 
 // ponytail: one bundled cue for both timer end and quiet signal; split into a
@@ -29,16 +30,34 @@ const List<UnlockCombo> unlockCombos = [
   UnlockCombo('Ctrl+Alt+F9', 'F9'),
 ];
 
-/// Ephemeral classroom session for the four tools plus projector mode.
+/// Live classroom session for the four tools plus projector mode.
 ///
-/// Persistence and session history belong to issue #5; this object only holds
-/// live state. It owns the monotonic clock, the draw bag, the praise session,
-/// the bundled audio cue, and the teacher lock.
+/// Settings, praise tallies, and aggregate day history flow through the
+/// optional [BellRepository]; the timer itself is never persisted, so a
+/// restart always returns to a clean idle countdown (no phantom minutes).
+/// It owns the monotonic clock, the draw bag, the praise session, the
+/// bundled audio cue, and the teacher lock.
 class ToolSession extends ChangeNotifier with WidgetsBindingObserver {
-  ToolSession(this.store, {MonotonicClock? clock, this._player})
-    : _stopwatch = Stopwatch()..start() {
+  ToolSession(
+    this.store, {
+    MonotonicClock? clock,
+    this.now,
+    this.repository,
+    this._player,
+  }) : _stopwatch = Stopwatch()..start() {
     _clock = clock ?? () => _stopwatch.elapsed;
     timer = CountdownTimer(clock: _clock);
+    final repo = repository ?? store.repository;
+    if (repo != null) {
+      final snap = repo.load();
+      presetMinutes = snap.presetMinutes;
+      goal = snap.goal;
+      quietSound = snap.quietSound;
+      unlockComboIndex = snap.unlockComboIndex.clamp(
+        0,
+        unlockCombos.length - 1,
+      );
+    }
     store.addListener(_rosterChanged);
     WidgetsBinding.instance.addObserver(this);
   }
@@ -46,10 +65,18 @@ class ToolSession extends ChangeNotifier with WidgetsBindingObserver {
   static const Duration lockLongPress = Duration(milliseconds: 900);
 
   final RosterStore store;
+  final BellRepository? repository;
+  final DateTime Function()? now;
+  DateTime _currentNow() => (now ?? DateTime.now)();
+
   final Stopwatch _stopwatch;
   AudioPlayer? _player;
   late final MonotonicClock _clock;
   late final CountdownTimer timer;
+  // Whole seconds of the current run already written to history. Only
+  // elapsed time that actually passed while running is ever recorded, so a
+  // killed process can lose at most the last partial second (never gain time).
+  int _recordedSeconds = 0;
 
   FairDrawBag? _bag;
   String? _bagRosterId;
@@ -73,13 +100,72 @@ class ToolSession extends ChangeNotifier with WidgetsBindingObserver {
 
   TimerSnapshot get snapshot => timer.tick();
 
+  BellRepository? get _repo => repository ?? store.repository;
+
   PraiseSession get praise {
     final roster = store.selectedRoster;
     if (_praise == null || _praiseRosterId != roster?.id) {
       _praiseRosterId = roster?.id;
-      _praise = PraiseSession(goal: goal, groups: roster?.groups ?? const []);
+      final groups = roster?.groups ?? const <String>[];
+      final saved = roster == null
+          ? null
+          : _repo?.load().praiseByRoster[roster.id];
+      if (saved != null) {
+        final points = (saved['groupPoints'] as Map<String, dynamic>? ?? {});
+        _praise = PraiseSession.fromJson({
+          'goal': goal,
+          'sessionNumber': saved['sessionNumber'],
+          'classPoints': saved['classPoints'] ?? 0,
+          'groupPoints': {for (final g in groups) g: points[g] ?? 0},
+        });
+      } else {
+        _praise = PraiseSession(goal: goal, groups: groups);
+      }
     }
     return _praise!;
+  }
+
+  void _saveSettings() {
+    final repo = _repo;
+    if (repo == null) return;
+    repo.save(
+      repo.load().copyWith(
+        presetMinutes: presetMinutes,
+        goal: goal,
+        quietSound: quietSound,
+        unlockComboIndex: unlockComboIndex,
+      ),
+    );
+  }
+
+  void _savePraise() {
+    final repo = _repo;
+    final id = _praiseRosterId;
+    if (repo == null || id == null) return;
+    final snap = repo.load();
+    repo.save(
+      snap.copyWith(
+        praiseByRoster: {...snap.praiseByRoster, id: praise.toJson()},
+      ),
+    );
+  }
+
+  /// Write newly elapsed whole seconds of the current timer run to history.
+  void _flushFocus() {
+    final repo = _repo;
+    if (repo == null) return;
+    final elapsed = timer.tick().elapsed.inSeconds;
+    final delta = elapsed - _recordedSeconds;
+    if (delta > 0) {
+      repo.recordFocus(_currentNow(), delta);
+      _recordedSeconds = elapsed;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _flushFocus();
+    refresh();
   }
 
   void _rosterChanged() {
@@ -89,13 +175,13 @@ class ToolSession extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) => refresh();
-
   /// Advance a running timer; fires the bundled chime exactly once per run.
   void refresh() {
     final before = timer.phase;
     timer.tick();
+    if (timer.phase == TimerPhase.running || before != timer.phase) {
+      _flushFocus();
+    }
     if (timer.consumeEndEvent()) unawaited(_play());
     if (before != timer.phase) _syncTicker();
     if (timer.phase == TimerPhase.running || before != timer.phase) {
@@ -135,8 +221,11 @@ class ToolSession extends ChangeNotifier with WidgetsBindingObserver {
     switch (timer.phase) {
       case TimerPhase.idle:
       case TimerPhase.finished:
+        _flushFocus(); // settle the previous run's tail before restarting
+        _recordedSeconds = 0;
         timer.start(Duration(minutes: presetMinutes));
       case TimerPhase.running:
+        _flushFocus(); // settle whole seconds before the clock stops
         timer.pause();
       case TimerPhase.paused:
         timer.resume();
@@ -147,7 +236,9 @@ class ToolSession extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void skip() {
+    _flushFocus(); // count what actually ran, not the nominal preset
     timer.skip();
+    _recordedSeconds = timer.duration.inSeconds; // skip is not focus time
     _syncTicker();
     refresh();
     notifyListeners();
@@ -156,8 +247,11 @@ class ToolSession extends ChangeNotifier with WidgetsBindingObserver {
   void setPreset(int minutes) {
     if (locked || minutes < 1 || minutes > 120) return;
     presetMinutes = minutes;
+    _flushFocus();
     timer.reset();
+    _recordedSeconds = 0;
     _syncTicker();
+    _saveSettings();
     notifyListeners();
   }
 
@@ -202,6 +296,7 @@ class ToolSession extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void praisePoint(String? group, {bool subtract = false}) {
+    final before = praise.progress;
     if (group == null) {
       if (subtract) {
         praise.removeClassPoints(1);
@@ -213,12 +308,19 @@ class ToolSession extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       praise.addGroupPoints(group, 1);
     }
+    final delta = praise.progress - before;
+    if (delta != 0) {
+      // Praise corrections are part of the same aggregate day tally.
+      _repo?.recordPraise(_currentNow(), delta);
+      _savePraise();
+    }
     notifyListeners();
   }
 
   void resetPraise() {
     if (locked) return;
     praise.resetSession();
+    _savePraise();
     notifyListeners();
   }
 
@@ -229,12 +331,15 @@ class ToolSession extends ChangeNotifier with WidgetsBindingObserver {
       goal: goal,
       groups: store.selectedRoster?.groups ?? const [],
     );
+    _saveSettings();
+    _savePraise();
     notifyListeners();
   }
 
   void toggleQuietSound() {
     if (locked) return;
     quietSound = !quietSound;
+    _saveSettings();
     notifyListeners();
   }
 
@@ -263,11 +368,13 @@ class ToolSession extends ChangeNotifier with WidgetsBindingObserver {
   void cycleUnlockCombo() {
     if (locked) return;
     unlockComboIndex = (unlockComboIndex + 1) % unlockCombos.length;
+    _saveSettings();
     notifyListeners();
   }
 
   @override
   void dispose() {
+    _flushFocus(); // settle the current run's whole seconds
     WidgetsBinding.instance.removeObserver(this);
     store.removeListener(_rosterChanged);
     _tickTimer?.cancel();
