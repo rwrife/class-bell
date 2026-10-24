@@ -8,6 +8,11 @@ class DaySummary {
   final int praisePoints;
   final int focusSeconds;
   int get focusMinutes => focusSeconds ~/ 60;
+  Map<String, dynamic> toJson() => {
+    'day': day,
+    'praisePoints': praisePoints,
+    'focusSeconds': focusSeconds,
+  };
 }
 
 class BellSnapshot {
@@ -54,5 +59,7 @@ abstract interface class BellRepository {
   void recordFocus(DateTime when, int seconds);
   void recordPraise(DateTime when, int delta);
   List<DaySummary> history();
+  void clearAll();
+  void restore(BellSnapshot snapshot, List<DaySummary> history);
   void close();
 }

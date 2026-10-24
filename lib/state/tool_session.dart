@@ -372,6 +372,40 @@ class ToolSession extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Flush live timer time before a backup. Restores and wipes never resurrect
+  /// the active timer; elapsed time before the operation remains in history.
+  void flushForBackup() => _flushFocus();
+
+  void resetAfterDataChange() {
+    _tickTimer?.cancel();
+    _tickTimer = null;
+    timer.reset();
+    _recordedSeconds = 0;
+    _praise = null;
+    _praiseRosterId = null;
+    _bag = null;
+    _bagRosterId = null;
+    selectedName = null;
+    remainingDraws = 0;
+    drawNotice = '';
+    dim = false;
+    quietSound = false;
+    presetMinutes = 5;
+    goal = 20;
+    unlockComboIndex = 0;
+    final snap = _repo?.load();
+    if (snap != null) {
+      quietSound = snap.quietSound;
+      presetMinutes = snap.presetMinutes;
+      goal = snap.goal;
+      unlockComboIndex = snap.unlockComboIndex.clamp(
+        0,
+        unlockCombos.length - 1,
+      );
+    }
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _flushFocus(); // settle the current run's whole seconds
