@@ -400,12 +400,7 @@ class _PraisePage extends StatelessWidget {
                   _ToolAction(
                     keyName: 'praise-history',
                     label: 'History',
-                    onPressed: () {
-                      final items =
-                          session.store.repository?.history() ??
-                          (session.repository?.history() ?? const []);
-                      showHistory(context, items);
-                    },
+                    onPressed: () => showHistory(context, session),
                   ),
                   _ToolAction(
                     keyName: 'praise-reset',

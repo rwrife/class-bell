@@ -31,7 +31,8 @@ class RosterStore extends ChangeNotifier {
   }
 
   final BellRepository? repository;
-  late final List<Roster> _rosters;
+  // Reassigned by reload() after restore/delete-all, so not final.
+  late List<Roster> _rosters;
   late String _selectedRosterId;
 
   @override
@@ -52,6 +53,19 @@ class RosterStore extends ChangeNotifier {
 
   String _nextId(String prefix) =>
       '$prefix-${DateTime.now().microsecondsSinceEpoch}-${_idCounter++}';
+
+  /// Refresh memory after a confirmed restore or delete-all. Never write back
+  /// the old snapshot while loading.
+  void reload() {
+    final snap = repository?.load() ?? const BellSnapshot();
+    _rosters = List<Roster>.from(snap.rosters);
+    _selectedRosterId = snap.selectedRosterId;
+    if (_rosters.isNotEmpty &&
+        !_rosters.any((r) => r.id == _selectedRosterId)) {
+      _selectedRosterId = _rosters.first.id;
+    }
+    super.notifyListeners();
+  }
 
   List<Roster> get rosters => List.unmodifiable(_rosters);
 

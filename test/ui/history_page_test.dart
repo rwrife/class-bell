@@ -1,9 +1,13 @@
+import 'package:class_bell/backup/portable_backup.dart';
 import 'package:class_bell/domain/roster.dart';
 import 'package:class_bell/main.dart';
 import 'package:class_bell/repository/bell_repository.dart';
 import 'package:class_bell/state/roster_store.dart';
+import 'package:class_bell/state/tool_session.dart';
 import 'package:class_bell/ui/history_page.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' as material;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -29,7 +33,47 @@ class _FakeRepository implements BellRepository {
   List<DaySummary> history() => List.unmodifiable(_history);
 
   @override
+  void clearAll() {
+    _snapshot = const BellSnapshot();
+    _history.clear();
+  }
+
+  @override
+  void restore(BellSnapshot snapshot, List<DaySummary> days) {
+    _snapshot = snapshot;
+    _history
+      ..clear()
+      ..addAll(days);
+  }
+
+  @override
   void close() {}
+}
+
+class _FakeFilePicker extends FilePicker {
+  int clears = 0;
+
+  @override
+  Future<bool?> clearTemporaryFiles() async {
+    clears++;
+    return true;
+  }
+}
+
+class _FakeBackupServices implements BackupServices {
+  _FakeBackupServices(this.source);
+
+  String? source;
+
+  @override
+  Future<ExportOutcome> saveDocument({
+    required String fileName,
+    required String content,
+    required String label,
+  }) async => const ExportOutcome(succeeded: true, savedPath: '/tmp/x');
+
+  @override
+  Future<String?> openDocument() async => source;
 }
 
 void main() {
@@ -38,15 +82,98 @@ void main() {
   testWidgets('HistoryPage renders empty state and privacy notice', (
     tester,
   ) async {
+    final repo = _FakeRepository(const []);
+    final store = RosterStore(repository: repo);
+    addTearDown(store.dispose);
+    final session = ToolSession(store, repository: repo);
+    addTearDown(session.dispose);
     await tester.pumpWidget(
-      const Directionality(
+      Directionality(
         textDirection: TextDirection.ltr,
-        child: HistoryPage(history: []),
+        child: HistoryPage(session: session),
       ),
     );
     expect(find.byKey(const Key('history-privacy-note')), findsOneWidget);
     expect(find.byKey(const Key('history-empty')), findsOneWidget);
   });
+
+  testWidgets(
+    'restore confirmation gates overwrite; delete confirmation gates wipe',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      tester.view.physicalSize = const Size(800, 1100);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final repo = _FakeRepository([]);
+      final store = RosterStore(repository: repo);
+      addTearDown(store.dispose);
+      final rosterId = store.createRoster('Room 7');
+      store.addStudent(rosterId: rosterId, displayName: 'Nia');
+      final session = ToolSession(store, repository: repo);
+      addTearDown(session.dispose);
+      session.setGoal(15);
+      session.praisePoint(null);
+      final saved = backupJson(repo.load(), repo.history());
+      store.createRoster('Room 8');
+      session.setGoal(99);
+      final services = _FakeBackupServices(saved);
+      final picker = _FakeFilePicker();
+      FilePicker.platform = picker;
+
+      await tester.pumpWidget(
+        material.MaterialApp(
+          home: material.Scaffold(
+            body: HistoryPage(session: session, services: services),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      Future<void> tapAction(String key) async {
+        final target = find.byKey(Key(key));
+        await tester.ensureVisible(target);
+        await tester.pumpAndSettle();
+        await tester.tap(target);
+        await tester.pumpAndSettle();
+      }
+
+      await tapAction('import-backup');
+      expect(find.text('Replace all local data?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(store.rosters.map((r) => r.name), ['Room 7', 'Room 8']);
+      expect(session.goal, 99);
+
+      await tapAction('import-backup');
+      await tester.tap(find.byKey(const Key('dialog-submit')));
+      await tester.pumpAndSettle();
+      expect(store.rosters.map((r) => r.name), ['Room 7']);
+      expect(session.goal, 15);
+      expect(session.praise.classPoints, 1);
+      await tester.tap(find.text('Dismiss'));
+      await tester.pumpAndSettle();
+
+      await tapAction('delete-all');
+      expect(find.text('Delete all local data?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(store.rosters, hasLength(1));
+
+      await tapAction('delete-all');
+      await tester.tap(find.byKey(const Key('dialog-submit')));
+      await tester.pumpAndSettle();
+      expect(store.rosters, isEmpty);
+      expect(repo.history(), isEmpty);
+      expect(picker.clears, 1);
+      await tester.tap(find.text('Dismiss'));
+      await tester.pumpAndSettle();
+
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
 
   for (final platform in [
     TargetPlatform.windows,

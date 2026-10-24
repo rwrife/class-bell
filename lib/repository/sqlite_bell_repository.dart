@@ -122,4 +122,51 @@ class SqliteBellRepository implements BellRepository {
 
   @override
   void close() => _db.close();
+
+  /// Delete-all: one transaction that drops every row this app owns. Schema
+  /// and userVersion stay (empty tables hold no classroom data), so a reopen
+  /// after clearAll is provably the same empty state as a first run.
+  @override
+  void clearAll() {
+    _db.execute('BEGIN IMMEDIATE');
+    try {
+      _db.execute('DELETE FROM state');
+      _db.execute('DELETE FROM day_totals');
+      _db.execute('COMMIT');
+    } catch (_) {
+      _db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  @override
+  void restore(BellSnapshot snapshot, List<DaySummary> history) {
+    _db.execute('BEGIN IMMEDIATE');
+    try {
+      _db.execute('DELETE FROM state');
+      _db.execute('DELETE FROM day_totals');
+      final data = {
+        'rosters': snapshot.rosters.map((r) => r.toJson()).toList(),
+        'selectedRosterId': snapshot.selectedRosterId,
+        'presetMinutes': snapshot.presetMinutes,
+        'goal': snapshot.goal,
+        'quietSound': snapshot.quietSound,
+        'unlockComboIndex': snapshot.unlockComboIndex,
+        'praiseByRoster': snapshot.praiseByRoster,
+      };
+      _db.execute('INSERT INTO state(id, json) VALUES (1, ?)', [
+        jsonEncode(data),
+      ]);
+      for (final day in history) {
+        _db.execute(
+          'INSERT INTO day_totals(day, praise_points, focus_seconds) VALUES (?, ?, ?)',
+          [day.day, day.praisePoints, day.focusSeconds],
+        );
+      }
+      _db.execute('COMMIT');
+    } catch (_) {
+      _db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
 }
