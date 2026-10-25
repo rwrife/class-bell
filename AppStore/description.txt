@@ -1,7 +1,5 @@
 Class Bell — the calm classroom companion designed to run entirely on your own device.
 
-DRAFT STORE COPY — planned features, not yet shipped. Review and update against implemented features before any store submission.
-
 Teachers juggle ad-laden timer websites, "spin the wheel" pickers, and points-board apps that want accounts and Internet. Class Bell puts the four tools a class actually needs into one offline app for your Windows classroom PC, an Android or Windows tablet, or a phone.
 
 WHAT IT DOES
