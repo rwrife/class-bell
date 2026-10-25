@@ -60,14 +60,16 @@ App Store Connect bundle ID status: **CREATED com.infinityball.classbell** (regi
 
 ## Current status
 
-Scaffold only — documentation, store copy, and app icon exist; no application code yet. Milestones:
+Flutter app and local-first classroom tools are implemented. Milestones:
 
-1. Flutter workspace (windows/android/ios enabled) + CI (Windows primary build/test).
-2. Domain layer: rosters, timer engine, fair picker, praise tallies (pure Dart + tests).
-3. Adaptive UI shell + the four tools on phone/tablet/desktop.
-4. Big-screen mode, keyboard shortcuts, session history.
-5. Export/backup/restore + privacy controls.
-6. Windows release build on `v*` tags via `.github/workflows/release.yml`; mobile builds keep compiling; store submission is a later opt-in milestone.
+1. Flutter workspace (windows/android/ios enabled) + CI (Windows primary build/test). ✅
+2. Domain layer: rosters, timer engine, fair picker, praise tallies (pure Dart + tests). ✅
+3. Adaptive UI shell + the four tools on phone/tablet/desktop. ✅
+4. Big-screen mode, keyboard shortcuts, session history. ✅
+5. Export/backup/restore + privacy controls. ✅
+6. Windows release build on `v*` tags via `.github/workflows/release.yml`; mobile builds keep compiling; store submission is a later opt-in milestone. ✅ (workflow + icon wiring; store submission deferred)
+
+Icon assets come from `AppStore/icon.png`; regenerate everything after an artwork change with `uv run --with pillow python tool/wire_icons.py`. Manual projector and screen-reader checks remain pending; no fake device results.
 
 ## Development quickstart
 
